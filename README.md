@@ -1,93 +1,215 @@
-# clawdbot-poc
+# Clawdbot in Cloudflare Sandbox
 
+Run [Clawdbot](https://clawd.bot/) personal AI assistant in a Cloudflare Sandbox container.
 
+## What is this?
 
-## Getting started
+This project runs Clawdbot's Gateway (the control plane for the personal AI assistant) inside a Cloudflare Sandbox container. You interact with it via:
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+- **WebChat**: Built-in web chat interface at the root URL
+- **Control UI**: Gateway dashboard for configuration and monitoring
+- **Channels**: Optional integrations with Telegram, Discord, Slack, etc.
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+## Prerequisites
 
-## Add your files
+- [Node.js](https://nodejs.org/) >= 18
+- [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/)
+- An Anthropic API key (or other supported provider)
+- Cloudflare account with Workers and Containers access
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+## Quick Start
+
+### 1. Install dependencies
+
+```bash
+npm install
+```
+
+### 2. Configure secrets
+
+Set your API keys as Wrangler secrets:
+
+```bash
+# Required: Anthropic API key for Claude models
+wrangler secret put ANTHROPIC_API_KEY
+
+# Optional: Protect gateway access with a token
+wrangler secret put CLAWDBOT_GATEWAY_TOKEN
+```
+
+### 3. Deploy
+
+```bash
+npm run deploy
+```
+
+### 4. Access your Clawdbot
+
+Open the deployed URL in your browser. You'll see the Clawdbot Control UI where you can:
+
+- Use WebChat to interact with your assistant
+- Monitor sessions and usage
+- Configure settings
+
+## Configuration
+
+### Required Secrets
+
+| Secret | Description |
+|--------|-------------|
+| `ANTHROPIC_API_KEY` | Your Anthropic API key for Claude models |
+
+### Optional Secrets
+
+| Secret | Description |
+|--------|-------------|
+| `CLAWDBOT_GATEWAY_TOKEN` | Token to protect gateway access |
+| `OPENAI_API_KEY` | OpenAI API key (for alternative models) |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot token |
+| `TELEGRAM_DM_POLICY` | DM policy: `pairing` (default) or `open` |
+| `DISCORD_BOT_TOKEN` | Discord bot token |
+| `DISCORD_DM_POLICY` | DM policy: `pairing` (default) or `open` |
+| `SLACK_BOT_TOKEN` | Slack bot token |
+| `SLACK_APP_TOKEN` | Slack app token |
+
+### Setting Secrets
+
+```bash
+# Example: Add Telegram bot
+wrangler secret put TELEGRAM_BOT_TOKEN
+# Enter your bot token when prompted
+
+# Example: Set DM policy to open (not recommended for production)
+wrangler secret put TELEGRAM_DM_POLICY
+# Enter: open
+```
+
+## Channel Setup
+
+### Telegram
+
+1. Create a bot via [@BotFather](https://t.me/botfather)
+2. Copy the bot token
+3. Set the secret: `wrangler secret put TELEGRAM_BOT_TOKEN`
+4. Redeploy: `npm run deploy`
+
+Default DM policy is `pairing` - unknown users will receive a pairing code that you need to approve.
+
+### Discord
+
+1. Create an application at [Discord Developer Portal](https://discord.com/developers/applications)
+2. Create a bot and copy the token
+3. Set the secret: `wrangler secret put DISCORD_BOT_TOKEN`
+4. Invite the bot to your server with appropriate permissions
+5. Redeploy: `npm run deploy`
+
+### Slack
+
+1. Create a Slack app at [api.slack.com](https://api.slack.com/apps)
+2. Enable Socket Mode and get an App-Level Token
+3. Add Bot Token Scopes and install to workspace
+4. Set secrets:
+   ```bash
+   wrangler secret put SLACK_BOT_TOKEN
+   wrangler secret put SLACK_APP_TOKEN
+   ```
+5. Redeploy: `npm run deploy`
+
+## Local Development
+
+```bash
+npm run dev
+```
+
+This starts a local development server. Note that container features may have limitations in local dev mode.
+
+## Architecture
 
 ```
-cd existing_repo
-git remote add origin https://gitlab.cfdata.org/bbrunner/clawdbot-poc.git
-git branch -M main
-git push -uf origin main
+Browser / Chat App
+       │
+       ▼
+┌─────────────────────────────────────┐
+│     Cloudflare Worker (index.ts)    │
+│  - Proxies requests to Clawdbot     │
+│  - Injects secrets as env vars      │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│     Cloudflare Sandbox Container    │
+│  ┌───────────────────────────────┐  │
+│  │     Clawdbot Gateway          │  │
+│  │  - Control UI (Web Dashboard) │  │
+│  │  - WebChat                    │  │
+│  │  - Channel Connectors         │  │
+│  │  - Agent Runtime              │  │
+│  └───────────────────────────────┘  │
+└─────────────────────────────────────┘
 ```
 
-## Integrate with your tools
+## Endpoints
 
-- [ ] [Set up project integrations](https://gitlab.cfdata.org/bbrunner/clawdbot-poc/-/settings/integrations)
+| Path | Description |
+|------|-------------|
+| `/` | Clawdbot Control UI / WebChat |
+| `/health` | Gateway health check |
+| `/sandbox-health` | Sandbox wrapper health check |
+| `/ws` | WebSocket endpoint for real-time communication |
 
-## Collaborate with your team
+## Customization
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+### Modify Default Configuration
 
-## Test and Deploy
+Edit `clawdbot.json.template` to change default settings:
 
-Use the built-in continuous integration in GitLab.
+```json
+{
+  "agent": {
+    "model": "anthropic/claude-sonnet-4-20250514",
+    "name": "Your Bot Name",
+    "persona": "Custom persona description..."
+  }
+}
+```
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+### Change the Model
 
-***
+Set a different default model in the template:
 
-# Editing this README
+- `anthropic/claude-opus-4-5` - Most capable
+- `anthropic/claude-sonnet-4-20250514` - Good balance (default)
+- `anthropic/claude-haiku-4-5` - Fastest/cheapest
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+## Troubleshooting
 
-## Suggestions for a good README
+### Gateway fails to start
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+1. Check that `ANTHROPIC_API_KEY` is set: `wrangler secret list`
+2. Check Worker logs: `wrangler tail`
 
-## Name
-Choose a self-explaining name for your project.
+### Channels not connecting
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+1. Verify the token is set correctly
+2. Check that the bot has appropriate permissions
+3. For Telegram/Discord: ensure the bot is added to the chat/server
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+### WebSocket issues
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+The Control UI uses WebSockets. If you're behind a proxy, ensure WebSocket connections are allowed.
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+## Security Notes
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+- **DM Pairing**: By default, unknown DMs require approval via a pairing code. This prevents unauthorized access.
+- **Gateway Token**: Set `CLAWDBOT_GATEWAY_TOKEN` to protect the web UI from unauthorized access.
+- **Channel Policies**: Review DM policies before setting to `open` in production.
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+## Links
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+- [Clawdbot Documentation](https://docs.clawd.bot)
+- [Clawdbot GitHub](https://github.com/clawdbot/clawdbot)
+- [Cloudflare Sandbox SDK](https://github.com/cloudflare/sandbox-sdk)
 
 ## License
-For open source projects, say how it is licensed.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+MIT

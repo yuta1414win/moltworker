@@ -1,0 +1,39 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "clawdbot-sandbox",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-05-06",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  },
+  // Container configuration for the Clawdbot sandbox
+  "containers": [
+    {
+      "class_name": "Sandbox",
+      "image": "./Dockerfile",
+      "instance_type": "basic"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "Sandbox",
+        "name": "Sandbox"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "new_sqlite_classes": ["Sandbox"],
+      "tag": "v1"
+    }
+  ]
+  // Secrets to configure via `wrangler secret put`:
+  // - ANTHROPIC_API_KEY: Your Anthropic API key
+  // - TELEGRAM_BOT_TOKEN: (optional) Telegram bot token
+  // - DISCORD_BOT_TOKEN: (optional) Discord bot token
+  // - SLACK_BOT_TOKEN: (optional) Slack bot token
+  // - SLACK_APP_TOKEN: (optional) Slack app token
+  // - CLAWDBOT_GATEWAY_TOKEN: (optional) Token to protect gateway access
+}
