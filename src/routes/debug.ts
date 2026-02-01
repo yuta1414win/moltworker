@@ -93,11 +93,46 @@ debug.get('/processes', async (c) => {
   }
 });
 
+/**
+ * Validate and sanitize path to prevent path traversal attacks
+ * Only allows alphanumeric characters, hyphens, underscores, and forward slashes
+ */
+function sanitizePath(path: string): { valid: boolean; sanitized: string; error?: string } {
+  // Must start with /
+  if (!path.startsWith('/')) {
+    path = '/' + path;
+  }
+  
+  // Block path traversal attempts
+  if (path.includes('..') || path.includes('//') || path.includes('\\')) {
+    return { valid: false, sanitized: '', error: 'Path traversal detected' };
+  }
+  
+  // Only allow safe characters: alphanumeric, -, _, /, ., ?query=params
+  const pathOnly = path.split('?')[0];
+  const safePathPattern = /^[a-zA-Z0-9\-_\/\.]+$/;
+  if (!safePathPattern.test(pathOnly) && pathOnly !== '/') {
+    return { valid: false, sanitized: '', error: 'Invalid characters in path' };
+  }
+  
+  // Normalize the path
+  const normalized = path.replace(/\/+/g, '/');
+  
+  return { valid: true, sanitized: normalized };
+}
+
 // GET /debug/gateway-api - Probe the moltbot gateway HTTP API
+// SECURITY: Path is validated to prevent path traversal attacks
 debug.get('/gateway-api', async (c) => {
   const sandbox = c.get('sandbox');
-  const path = c.req.query('path') || '/';
+  const rawPath = c.req.query('path') || '/';
   const MOLTBOT_PORT = 18789;
+  
+  // Validate and sanitize path
+  const { valid, sanitized: path, error } = sanitizePath(rawPath);
+  if (!valid) {
+    return c.json({ error: 'Invalid path', details: error, provided: rawPath }, 400);
+  }
   
   try {
     const url = `http://localhost:${MOLTBOT_PORT}${path}`;
@@ -123,10 +158,32 @@ debug.get('/gateway-api', async (c) => {
   }
 });
 
+/**
+ * Allowed CLI commands for security (whitelist approach)
+ * Only safe, read-only commands are permitted
+ */
+const ALLOWED_CLI_COMMANDS: Record<string, string> = {
+  'help': 'clawdbot --help',
+  'version': 'clawdbot --version',
+  'devices-list': 'clawdbot devices list --json --url ws://localhost:18789',
+  'config-show': 'cat /root/.clawdbot/clawdbot.json',
+};
+
 // GET /debug/cli - Test moltbot CLI commands (CLI is still named clawdbot)
+// SECURITY: Only whitelisted commands are allowed to prevent command injection
 debug.get('/cli', async (c) => {
   const sandbox = c.get('sandbox');
-  const cmd = c.req.query('cmd') || 'clawdbot --help';
+  const cmdKey = c.req.query('cmd') || 'help';
+  
+  // Validate command against whitelist
+  const cmd = ALLOWED_CLI_COMMANDS[cmdKey];
+  if (!cmd) {
+    return c.json({
+      error: 'Invalid command',
+      hint: `Allowed commands: ${Object.keys(ALLOWED_CLI_COMMANDS).join(', ')}`,
+      provided: cmdKey,
+    }, 400);
+  }
   
   try {
     const proc = await sandbox.startProcess(cmd);
@@ -141,6 +198,7 @@ debug.get('/cli', async (c) => {
 
     const logs = await proc.getLogs();
     return c.json({
+      commandKey: cmdKey,
       command: cmd,
       status: proc.status,
       exitCode: proc.exitCode,
@@ -150,7 +208,7 @@ debug.get('/cli', async (c) => {
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return c.json({ error: errorMessage, command: cmd }, 500);
+    return c.json({ error: errorMessage, commandKey: cmdKey }, 500);
   }
 });
 

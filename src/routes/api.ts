@@ -8,6 +8,20 @@ import { R2_MOUNT_PATH } from '../config';
 const CLI_TIMEOUT_MS = 20000;
 
 /**
+ * Validate requestId format to prevent command injection
+ * Only allows alphanumeric characters, hyphens, and underscores
+ * Typical format: UUID or similar identifier
+ */
+function isValidRequestId(requestId: string): boolean {
+  // Max length to prevent buffer overflow attacks
+  if (requestId.length > 128) return false;
+  
+  // Only allow safe characters: alphanumeric, hyphens, underscores
+  const safePattern = /^[a-zA-Z0-9\-_]+$/;
+  return safePattern.test(requestId);
+}
+
+/**
  * API routes
  * - /api/admin/* - Protected admin API routes (Cloudflare Access required)
  * 
@@ -72,12 +86,21 @@ adminApi.get('/devices', async (c) => {
 });
 
 // POST /api/admin/devices/:requestId/approve - Approve a pending device
+// SECURITY: requestId is validated to prevent command injection
 adminApi.post('/devices/:requestId/approve', async (c) => {
   const sandbox = c.get('sandbox');
   const requestId = c.req.param('requestId');
 
   if (!requestId) {
     return c.json({ error: 'requestId is required' }, 400);
+  }
+
+  // Validate requestId format to prevent command injection
+  if (!isValidRequestId(requestId)) {
+    return c.json({ 
+      error: 'Invalid requestId format',
+      hint: 'requestId must contain only alphanumeric characters, hyphens, and underscores',
+    }, 400);
   }
 
   try {
@@ -143,6 +166,16 @@ adminApi.post('/devices/approve-all', async (c) => {
     const results: Array<{ requestId: string; success: boolean; error?: string }> = [];
 
     for (const device of pending) {
+      // Validate requestId before using in command
+      if (!isValidRequestId(device.requestId)) {
+        results.push({
+          requestId: device.requestId,
+          success: false,
+          error: 'Invalid requestId format',
+        });
+        continue;
+      }
+
       try {
         const approveProc = await sandbox.startProcess(`clawdbot devices approve ${device.requestId} --url ws://localhost:18789`);
         await waitForProcess(approveProc, CLI_TIMEOUT_MS);

@@ -102,12 +102,15 @@ export function createAccessMiddleware(options: AccessMiddlewareOptions) {
       c.set('accessUser', { email: payload.email, name: payload.name });
       await next();
     } catch (err) {
+      // Log full error details for debugging (server-side only)
       console.error('Access JWT verification failed:', err);
       
+      // SECURITY: Don't expose internal error details to clients
+      // Only log detailed errors server-side to prevent information leakage
       if (type === 'json') {
         return c.json({
           error: 'Unauthorized',
-          details: err instanceof Error ? err.message : 'JWT verification failed',
+          message: 'Authentication failed. Please try logging in again.',
         }, 401);
       } else {
         return c.html(`

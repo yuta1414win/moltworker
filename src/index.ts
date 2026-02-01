@@ -21,6 +21,7 @@
  */
 
 import { Hono } from 'hono';
+import { secureHeaders } from 'hono/secure-headers';
 import { getSandbox, Sandbox, type SandboxOptions } from '@cloudflare/sandbox';
 
 import type { AppEnv, MoltbotEnv } from './types';
@@ -110,6 +111,34 @@ const app = new Hono<AppEnv>();
 // =============================================================================
 // MIDDLEWARE: Applied to ALL routes
 // =============================================================================
+
+// Middleware: Security headers (XSS protection, content sniffing prevention, etc.)
+app.use('*', secureHeaders({
+  // Content Security Policy - restrict resource loading
+  contentSecurityPolicy: {
+    defaultSrc: ["'self'"],
+    scriptSrc: ["'self'", "'unsafe-inline'"], // Allow inline scripts for loading page
+    styleSrc: ["'self'", "'unsafe-inline'"],
+    imgSrc: ["'self'", "data:", "blob:"],
+    connectSrc: ["'self'", "wss:", "ws:"], // Allow WebSocket connections
+    frameSrc: ["'none'"],
+    objectSrc: ["'none'"],
+  },
+  // Prevent clickjacking
+  xFrameOptions: 'DENY',
+  // Prevent MIME type sniffing
+  xContentTypeOptions: 'nosniff',
+  // Enable XSS filter
+  xXssProtection: '1; mode=block',
+  // Referrer policy
+  referrerPolicy: 'strict-origin-when-cross-origin',
+  // Permissions policy
+  permissionsPolicy: {
+    camera: [],
+    microphone: [],
+    geolocation: [],
+  },
+}));
 
 // Middleware: Log every request
 app.use('*', async (c, next) => {
